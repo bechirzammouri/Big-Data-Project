@@ -1,0 +1,43 @@
+services:
+  # PostgreSQL for Historical Batch Data
+  postgres:
+    image: postgres:15
+    container_name: postgres_traffic
+    environment:
+      POSTGRES_USER: bigdata
+      POSTGRES_PASSWORD: bigdata123
+      POSTGRES_DB: traffic_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d
+      - ./data:/data
+    networks:
+      - bigdata-network
+
+  # Hadoop cluster with Spark and Sqoop
+  hadoop:
+    image: liliasfaxi/hadoop-cluster:latest
+    container_name: hadoop_cluster
+    hostname: hadoop
+    ports:
+      - "9870:9870"    # HDFS NameNode Web UI
+      - "8088:8088"    # YARN ResourceManager
+      - "9000:9000"    # HDFS port
+    volumes:
+      - hadoop_data:/hadoop
+      - ./sqoop-scripts:/sqoop-scripts
+    networks:
+      - bigdata-network
+    tty: true
+    stdin_open: true
+
+volumes:
+  postgres_data:
+  hadoop_data:
+
+networks:
+  bigdata-network:
+    driver: bridge
+

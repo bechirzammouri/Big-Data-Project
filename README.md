@@ -1,0 +1,120 @@
+# Big Data Traffic Project - Historical Data Pipeline
+
+**Team**: Rami + Riadh
+
+## Task
+
+Load historical Paris traffic data: **CSV → PostgreSQL → HDFS (using Sqoop)**
+
+## Data Source
+
+Paris Open Data - Comptages routiers permanents  
+https://opendata.paris.fr/explore/dataset/comptages-routiers-permanents
+
+## Quick Start
+
+### 1. Start Docker Services
+
+```powershell
+docker-compose up -d
+```
+
+Wait 30 seconds, then verify:
+```powershell
+docker-compose ps
+```
+
+### 2. Download Data
+
+```powershell
+.\scripts\download-data.ps1
+```
+
+This downloads CSV to `data/paris_traffic_data.csv`
+
+### 3. Load Data into PostgreSQL
+
+```powershell
+cd data-loader
+pip install -r requirements.txt
+python load_paris_traffic.py ../data/paris_traffic_data.csv
+```
+
+### 4. Transfer to HDFS with Sqoop
+
+```powershell
+docker exec -it hadoop_cluster bash
+cd /sqoop-scripts
+chmod +x import-traffic-to-hdfs.sh
+./import-traffic-to-hdfs.sh
+exit
+```
+
+## Verify
+
+```powershell
+# Check PostgreSQL
+docker exec -it postgres_traffic psql -U bigdata -d traffic_db -c "SELECT COUNT(*) FROM traffic_data;"
+
+# Check HDFS
+docker exec -it hadoop_cluster hdfs dfs -ls /user/bigdata/traffic/full/
+
+# View sample data
+docker exec -it hadoop_cluster hdfs dfs -cat /user/bigdata/traffic/full/part-m-00000 | head -10
+```
+
+## Web UIs
+
+- Hadoop HDFS: http://localhost:9870
+- YARN: http://localhost:8088
+
+## Database Connection
+
+- Host: `localhost`
+- Port: `5432`
+- Database: `traffic_db`
+- User: `bigdata`
+- Password: `bigdata123`
+
+## Architecture
+
+```
+Paris Open Data (CSV)
+        ↓
+   PostgreSQL
+        ↓
+   Sqoop Export
+        ↓
+      HDFS
+```
+
+## Stop Services
+
+```powershell
+docker-compose down
+```
+
+## Project Files
+
+```
+Bigdata/
+├── docker-compose.yml              # PostgreSQL + Hadoop + Sqoop
+├── README.md                       # This file
+├── postgres-init/
+│   └── 01-create-tables.sql       # Database schema
+├── data-loader/
+│   ├── load_paris_traffic.py      # CSV → PostgreSQL
+│   └── requirements.txt
+├── sqoop-scripts/
+│   └── import-traffic-to-hdfs.sh  # PostgreSQL → HDFS
+├── scripts/
+│   └── download-data.ps1          # Download CSV
+└── data/                           # Put CSV files here
+```
+
+## Services
+
+- **postgres_traffic**: PostgreSQL database for CSV data
+- **hadoop_cluster**: Hadoop + Spark + Sqoop (liliasfaxi/hadoop-cluster image)
+
+Simple. Focused. Just what you need!
