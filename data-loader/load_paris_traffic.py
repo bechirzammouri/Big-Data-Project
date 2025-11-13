@@ -33,7 +33,7 @@ def load_data(csv_file):
         'geo_point_2d': 'geo_point'
     }, inplace=True)
     
-    df['date_heure_comptage'] = pd.to_datetime(df['date_heure_comptage'], errors='coerce')
+    df['date_heure_comptage'] = pd.to_datetime(df['date_heure_comptage'], utc=True, errors='coerce')
     df['date_debut_dispo_data'] = pd.to_datetime(df['date_debut_dispo_data'], errors='coerce')
     df['date_fin_dispo_data'] = pd.to_datetime(df['date_fin_dispo_data'], errors='coerce')
     
@@ -43,6 +43,8 @@ def load_data(csv_file):
     
     df['debit_horaire'] = pd.to_numeric(df['debit_horaire'], errors='coerce')
     df['taux_occupation'] = pd.to_numeric(df['taux_occupation'], errors='coerce')
+    
+    df = df.replace({pd.NaT: None, float('nan'): None})
     
     columns = ['identifiant_arc', 'libelle', 'date_heure_comptage', 'debit_horaire',
                'taux_occupation', 'etat_trafic', 'identifiant_noeud_amont',
