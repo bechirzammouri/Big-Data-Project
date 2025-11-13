@@ -28,6 +28,8 @@ services:
     volumes:
       - hadoop_data:/hadoop
       - ./sqoop-scripts:/sqoop-scripts
+      - ./scripts:/scripts
+      - ./data:/data
     networks:
       - bigdata-network
     tty: true

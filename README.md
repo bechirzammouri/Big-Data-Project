@@ -40,15 +40,24 @@ pip install -r requirements.txt
 python load_paris_traffic.py ../data/paris_traffic_data.csv
 ```
 
-### 4. Transfer to HDFS with Sqoop
+### 4. Setup Hadoop (First Time Only)
 
 ```powershell
-docker exec -it hadoop_cluster bash
-cd /sqoop-scripts
-chmod +x import-traffic-to-hdfs.sh
-./import-traffic-to-hdfs.sh
-exit
+docker exec -it hadoop_cluster bash -c "echo 'hadoop' > /usr/local/hadoop/etc/hadoop/workers"
 ```
+
+### 5. Install Sqoop (First Time Only)
+
+```powershell
+docker exec -it hadoop_cluster bash /sqoop-scripts/install-sqoop.sh
+```
+
+### 6. Transfer to HDFS with Sqoop
+
+```powershell
+docker exec -it hadoop_cluster bash /sqoop-scripts/import-traffic-to-hdfs.sh
+```
+
 
 ## Verify
 
@@ -57,11 +66,13 @@ exit
 docker exec -it postgres_traffic psql -U bigdata -d traffic_db -c "SELECT COUNT(*) FROM traffic_data;"
 
 # Check HDFS
-docker exec -it hadoop_cluster hdfs dfs -ls /user/bigdata/traffic/full/
+docker exec -it hadoop_cluster hdfs dfs -ls /user/bigdata/traffic/
 
 # View sample data
-docker exec -it hadoop_cluster hdfs dfs -cat /user/bigdata/traffic/full/part-m-00000 | head -10
+docker exec -it hadoop_cluster hdfs dfs -cat /user/bigdata/traffic/part-m-00000 | head -10
 ```
+
+**Expected Output**: 21,928 records imported, ~4.36 MB data in HDFS
 
 ## Web UIs
 
@@ -98,7 +109,7 @@ docker-compose down
 
 ```
 Bigdata/
-├── docker-compose.yml              # PostgreSQL + Hadoop + Sqoop
+├── docker-compose.yml              # PostgreSQL + Hadoop
 ├── README.md                       # This file
 ├── postgres-init/
 │   └── 01-create-tables.sql       # Database schema
@@ -106,15 +117,18 @@ Bigdata/
 │   ├── load_paris_traffic.py      # CSV → PostgreSQL
 │   └── requirements.txt
 ├── sqoop-scripts/
+│   ├── install-sqoop.sh           # Install Sqoop + dependencies
 │   └── import-traffic-to-hdfs.sh  # PostgreSQL → HDFS
 ├── scripts/
 │   └── download-data.ps1          # Download CSV
-└── data/                           # Put CSV files here
+└── data/
+    └── paris_traffic_data.csv     # Traffic data (21,928 rows)
 ```
 
 ## Services
 
-- **postgres_traffic**: PostgreSQL database for CSV data
-- **hadoop_cluster**: Hadoop + Spark + Sqoop (liliasfaxi/hadoop-cluster image)
+- **postgres_traffic**: PostgreSQL 15 (stores 21,928 traffic records)
+- **hadoop_cluster**: Hadoop 3.3.6 single-node cluster (liliasfaxi/hadoop-cluster image)
 
-Simple. Focused. Just what you need!
+**Note**: Sqoop 1.4.7 is installed via script (not in base image)
+
