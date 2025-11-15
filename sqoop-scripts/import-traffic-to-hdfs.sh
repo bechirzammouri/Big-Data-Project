@@ -4,19 +4,19 @@ export SQOOP_HOME=/opt/sqoop
 export PATH=$PATH:$SQOOP_HOME/bin
 export HADOOP_HOME=/usr/local/hadoop
 
-$HADOOP_HOME/sbin/stop-all.sh
-
-echo "Y" | hdfs namenode -format
-
+# Démarrer Hadoop (ne jamais reformater)
 $HADOOP_HOME/sbin/start-dfs.sh
 $HADOOP_HOME/sbin/start-yarn.sh
 
-sleep 15
+sleep 10
 
+# Vérifier les démons
 jps
 
-hdfs dfs -mkdir -p /user/bigdata/traffic
+# Créer les dossiers HDFS si pas existants
+hdfs dfs -mkdir -p /user/bigdata
 
+# Import Sqoop
 sqoop import \
   --connect jdbc:postgresql://postgres:5432/traffic_db \
   --username bigdata \
@@ -26,5 +26,5 @@ sqoop import \
   --delete-target-dir \
   --num-mappers 1
 
+# Vérification
 hdfs dfs -ls /user/bigdata/traffic/
-
