@@ -1,172 +1,113 @@
-# Spark + Kafka → HDFS Pipeline Guide
+# Traffic Incident Data Pipeline
 
-## 🎯 Overview
+## Overview
 
-This pipeline consumes traffic incident data from Kafka and writes it to HDFS using PySpark.
-
-## 📋 Architecture
+This project processes real-time traffic incident data from TomTom API, streams it through Kafka, and stores it in HDFS using Apache Spark.
 
 ```
-TomTom API → Producer → Kafka Topic → Spark Streaming → HDFS
-                      (traffic_events)              (Parquet files)
+TomTom API → Producer → Kafka → Spark Streaming → HDFS
 ```
 
-## 🚀 Quick Start
+## Dependencies
 
-### 1. Start Services
-
+### Python Packages
 ```bash
-# Inside hadoop-master container
-cd /root
-./fix-kafka-zookeeper.sh
-
-# Wait for Kafka to start (30 seconds)
+pip install kafka-python requests pandas
 ```
 
-### 2. Setup Spark-Kafka Integration
+### System Requirements
+- Apache Kafka
+- Apache Spark 3.x
+- Hadoop HDFS
+- Python 3.7+
 
+### Spark-Kafka Connector
 ```bash
-chmod +x setup_spark_kafka.sh
-./setup_spark_kafka.sh
+# Download connector JARs automatically
+chmod +x fix_spark_kafka_connector.sh
+./fix_spark_kafka_connector.sh
 ```
 
-### 3. Start Producer
+## Quick Start
 
+### 1. Start Kafka & Zookeeper
 ```bash
-# Terminal 1: Start producer
-python3 producer_incidents.py
+# Run this script to start services
+./start-kafka-zookeeper.sh
+# Wait 30 seconds for services to initialize
 ```
 
-### 4. Run Spark Job
 
-**Option A: Batch Processing** (process existing messages)
-```bash
-# Terminal 2: Batch processing
-spark-submit \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2 \
-  spark_kafka_to_hdfs_batch.py
+### 3. Setup TomTom API Key
+Edit `produce_incident.py` and replace the API_KEY:
+```python
+API_KEY = "your_tomtom_api_key_here"
 ```
 
-**Option B: Streaming** (continuous processing)
+### 4. Run the Pipeline
+
+**Terminal 1 - Start Producer:**
 ```bash
-# Terminal 2: Streaming
-spark-submit \
-  --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2 \
-  spark_kafka_to_hdfs.py
+python3 produce_incident.py
 ```
 
-## 📊 Verify Data in HDFS
-
+**Terminal 2 - Start Spark Streaming:**
 ```bash
-# List files
+python3 kafka_to_hdfs.py
+```
+
+## Scripts Description
+
+| Script | Purpose |
+|--------|---------|
+| `produce_incident.py` | Fetches traffic data from TomTom API and sends to Kafka |
+| `kafka_to_hdfs.py` | Spark streaming job that reads from Kafka and writes to HDFS |
+| `fix_spark_kafka_connector.sh` | Downloads required Spark-Kafka JAR files |
+| `view_hdfs_data.sh` | Displays stored data in HDFS |
+| `view_parquet.py` | Views parquet files using pandas |
+| `test_events_persistency.sh` | Checks if data is properly stored in HDFS |
+
+## Verify Data
+
+### Check HDFS Storage
+```bash
+# List files in HDFS
 hdfs dfs -ls /traffic/incidents
 
-# Show sample data
-hdfs dfs -cat /traffic/incidents/part-*.parquet | head
+# View data structure
+./view_hdfs_data.sh
 
-# Or use Spark
-pyspark
->>> df = spark.read.parquet("hdfs://hadoop-master:9000/traffic/incidents")
->>> df.show()
->>> df.count()
+# Check data persistence
+./test_events_persistency.sh
 ```
 
-## 🔍 Query Data
 
-```python
-from pyspark.sql import SparkSession
-
-spark = SparkSession.builder.appName("QueryIncidents").getOrCreate()
-
-# Read data
-df = spark.read.parquet("hdfs://hadoop-master:9000/traffic/incidents")
-
-# Query examples
-df.show()
-df.printSchema()
-df.groupBy("type").count().show()
-df.groupBy("severity").count().show()
-df.filter(df.severity == 3).show()  # Major incidents only
-```
-
-## 📁 Output Structure
-
-```
-/traffic/incidents/
-├── timestamp=2025-11-15/
-│   ├── part-00000.parquet
-│   ├── part-00001.parquet
-│   └── ...
-├── timestamp=2025-11-16/
-│   └── ...
-└── _spark_metadata/
-```
-
-## 🛠️ Troubleshooting
-
-### Issue: "ClassNotFoundException: org.apache.spark.sql.kafka010"
-**Solution:** Run setup_spark_kafka.sh to download required JARs
-
-### Issue: "Connection refused" to Kafka
-**Solution:** Make sure Kafka is running
+### View Local Parquet Files
 ```bash
-jps  # Should show Kafka
-netstat -tuln | grep 9092  # Should show listening
+python3 view_parquet.py <path_to_parquet_file>
 ```
 
-### Issue: "Path does not exist: hdfs://..."
-**Solution:** Create HDFS directories
-```bash
-hdfs dfs -mkdir -p /traffic/incidents
-```
+## Troubleshooting
 
-## 📈 Performance Tips
+| Problem | Solution |
+|---------|----------|
+| Kafka connection refused | Check if Kafka is running: `jps \| grep Kafka` |
+| ClassNotFoundException for Kafka | Run `./fix_spark_kafka_connector.sh` |
+| HDFS path not found | Create directory: `hdfs dfs -mkdir -p /traffic/incidents` |
+| TomTom API errors | Verify API key is valid and has traffic API access |
+| No data in HDFS | Check producer is running and Kafka topic exists |
 
-1. **Increase parallelism:**
-   ```python
-   .config("spark.sql.shuffle.partitions", "200")
-   ```
+## Data Flow
 
-2. **Tune batch interval:**
-   ```python
-   .trigger(processingTime='10 seconds')  # Adjust as needed
-   ```
+1. **Producer** (`produce_incident.py`) → Fetches Paris traffic incidents every 60 seconds
+2. **Kafka** → Stores messages in `traffic_events` topic  
+3. **Spark** (`kafka_to_hdfs.py`) → Processes messages and saves to HDFS
+4. **HDFS** → Stores data as partitioned Parquet files
 
-3. **Use compression:**
-   ```python
-   .option("compression", "snappy")
-   ```
+## Getting TomTom API Key
 
-## 🎓 What's Happening
-
-1. **Producer** fetches data from TomTom API every 60 seconds
-2. **Kafka** stores messages in `traffic_events` topic
-3. **Spark** reads from Kafka in micro-batches
-4. **HDFS** stores data in Parquet format, partitioned by date
-
-## 📊 Data Schema
-
-```
-root
- |-- id: string
- |-- type: integer (incident type code)
- |-- description: string
- |-- location: struct
- |    |-- from: string
- |    |-- to: string
- |    |-- coordinates: array
- |-- severity: integer (1=minor, 2=moderate, 3=major)
- |-- delay_seconds: integer
- |-- length_meters: integer
- |-- road_numbers: array
- |-- timestamp: string
- |-- start_time: string
- |-- end_time: string
-```
-
-## ✅ Success Indicators
-
-✓ Producer shows: "✓ Sent X incident(s) to Kafka"
-✓ Spark shows: "Batch: X" with increasing numbers
-✓ HDFS shows new files: `hdfs dfs -ls /traffic/incidents`
-✓ Data is queryable in Spark
+1. Visit https://developer.tomtom.com/
+2. Create account and log in
+3. Go to "My Dashboard" → "API Keys"
+4. Create new key with "Traffic API" permissions
+5. Copy key to `produce_incident.py`
