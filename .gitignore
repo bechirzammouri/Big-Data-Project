@@ -63,3 +63,8 @@ Thumbs.db
 *.bak
 *.backup
 
+# Unused files
+Dockerfile.hadoop
+sqoop-scripts/load-to-hdfs.sh
+scripts/install-sqoop.sh
+scripts/reset-database.sql

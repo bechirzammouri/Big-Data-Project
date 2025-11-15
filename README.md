@@ -2,6 +2,8 @@
 
 **Team**: Rami + Riadh
 
+> **⚠️ Windows Users**: After cloning, you MUST run Step 4 to fix line endings in bash scripts!
+
 ## Task
 
 Load historical Paris traffic data: **CSV → PostgreSQL → HDFS (using Sqoop)**
@@ -40,23 +42,37 @@ pip install -r requirements.txt
 python load_paris_traffic.py ../data/paris_traffic_data.csv
 ```
 
-### 4. Setup Hadoop (First Time Only)
+### 4. Fix Line Endings (Windows Only - First Time)
+
+**If you cloned on Windows**, bash scripts have wrong line endings (CRLF). Fix them:
+
+```powershell
+docker exec -it hadoop_cluster bash -c "dos2unix /sqoop-scripts/*.sh 2>/dev/null || sed -i 's/\r$//' /sqoop-scripts/*.sh"
+```
+
+### 5. Setup Hadoop (First Time Only)
 
 ```powershell
 docker exec -it hadoop_cluster bash -c "echo 'hadoop' > /usr/local/hadoop/etc/hadoop/workers"
 ```
 
-### 5. Install Sqoop (First Time Only)
+### 6. Install Sqoop (First Time Only)
 
 ```powershell
 docker exec -it hadoop_cluster bash /sqoop-scripts/install-sqoop.sh
 ```
 
-### 6. Transfer to HDFS with Sqoop
+### 7. Transfer to HDFS with Sqoop
 
 ```powershell
 docker exec -it hadoop_cluster bash /sqoop-scripts/import-traffic-to-hdfs.sh
 ```
+
+This will:
+- Format namenode
+- Start HDFS and YARN
+- Import 21,928 records from PostgreSQL to HDFS
+- Takes ~1 minute
 
 
 ## Verify
@@ -104,6 +120,29 @@ Paris Open Data (CSV)
 ```powershell
 docker-compose down
 ```
+
+## Troubleshooting
+
+### "bad interpreter: /bin/bash^M" or script fails
+
+**Problem**: Windows line endings (CRLF) in bash scripts  
+**Solution**: Run Step 4 to convert CRLF → LF:
+```powershell
+docker exec -it hadoop_cluster bash -c "sed -i 's/\r$//' /sqoop-scripts/*.sh"
+```
+
+### "0 datanode(s) running" error
+
+**Problem**: Hadoop workers file misconfigured  
+**Solution**: Run Step 5 to fix workers file:
+```powershell
+docker exec -it hadoop_cluster bash -c "echo 'hadoop' > /usr/local/hadoop/etc/hadoop/workers"
+```
+
+### "commons.lang.StringUtils" error
+
+**Problem**: Missing Apache Commons Lang library  
+**Solution**: Already fixed in `install-sqoop.sh` (downloads commons-lang-2.6.jar)
 
 ## Project Files
 
