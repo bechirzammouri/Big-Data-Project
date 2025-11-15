@@ -37,13 +37,21 @@ docker exec -it hadoop_cluster bash -c "sed -i 's/\r$//' /sqoop-scripts/*.sh"
 docker exec -it hadoop_cluster bash -c "sed -i 's|hdfs://hadoop-master:9000|hdfs://hadoop:9000|g' /usr/local/hadoop/etc/hadoop/core-site.xml && sed -i 's|hadoop-master|hadoop|g' /usr/local/hadoop/etc/hadoop/yarn-site.xml && sed -i 's|hadoop-master|hadoop|g' /usr/local/hadoop/etc/hadoop/mapred-site.xml && echo 'hadoop' > /usr/local/hadoop/etc/hadoop/workers"
 ```
 
-### 6. Install Sqoop (First Time Only)
+### 6. Format NameNode (First Time Only - NEVER AGAIN!)
+
+```powershell
+docker exec -it hadoop_cluster bash -c "echo 'Y' | hdfs namenode -format"
+```
+
+**⚠️ WARNING**: Only run this ONCE! Never format again or DataNode will break!
+
+### 7. Install Sqoop (First Time Only)
 
 ```powershell
 docker exec -it hadoop_cluster bash /sqoop-scripts/install-sqoop.sh
 ```
 
-### 7. Transfer to HDFS
+### 8. Transfer to HDFS
 
 ```powershell
 docker exec -it hadoop_cluster bash /sqoop-scripts/import-traffic-to-hdfs.sh
