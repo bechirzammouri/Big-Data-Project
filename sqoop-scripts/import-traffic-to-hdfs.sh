@@ -4,14 +4,10 @@ export SQOOP_HOME=/opt/sqoop
 export PATH=$PATH:$SQOOP_HOME/bin
 export HADOOP_HOME=/usr/local/hadoop
 
-$HADOOP_HOME/sbin/stop-all.sh
-
-echo "Y" | hdfs namenode -format
-
 $HADOOP_HOME/sbin/start-dfs.sh
 $HADOOP_HOME/sbin/start-yarn.sh
 
-sleep 15
+sleep 10
 
 jps
 
