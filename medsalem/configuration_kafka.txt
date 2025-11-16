@@ -1,0 +1,78 @@
+//lancement kafka
+./start-kafka-zookeeper.sh 
+
+
+//creation du topic 
+
+/usr/local/kafka/bin/kafka-topics.sh \
+  --zookeeper localhost:2181 \
+  --create --topic tomtom.flow --partitions 1 --replication-factor 1
+
+//verifier liste des topic
+
+/usr/local/kafka/bin/kafka-topics.sh --zookeeper localhost:2181 --list
+
+//creation consumer 
+
+/usr/local/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic tomtom.flow --from-beginning
+
+
+
+//producer_tomtom.py
+import os, time, json, requests
+from kafka import KafkaProducer
+
+API_KEY = os.environ["TOMTOM_API_KEY"]
+BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "hadoop-master:9092")
+TOPIC = os.getenv("TOPIC", "tomtom.flow")
+INTERVAL = float(os.getenv("INTERVAL", "15"))  # seconds
+
+URL = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
+PARAMS = {"key": API_KEY, "point": "48.8698,2.3075"}  # Champs-Élysées
+
+def fetch_once():
+    r = requests.get(URL, params=PARAMS, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    body = data.get("flowSegmentData", data)
+    body["endpoint"] = "absolute/10"
+    body["point"] = "48.8698,2.3075"
+    return body
+
+if __name__ == "__main__":
+    prod = KafkaProducer(
+        bootstrap_servers=BOOTSTRAP,
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+        api_version=(1,0,2)  # your broker is Kafka 1.0.2
+    )
+    while True:
+        try:
+            evt = fetch_once()
+            prod.send(TOPIC, evt)
+            prod.flush()
+        except Exception as e:
+            print("producer error:", e)
+        time.sleep(INTERVAL)
+
+
+
+//lancement du producer 
+docker run --rm -it --network hadoop -v "$PWD":/app -w /app python:3.11-slim `
+  bash -lc "pip install requests kafka-python && `
+            TOMTOM_API_KEY=YOUR_KEY `
+            KAFKA_BOOTSTRAP=hadoop-master:9092 `
+            TOPIC=tomtom.flow `
+            python producer_paris.py"
+
+
+
+
+
+//kfprop pour visualisation des topic kafka
+docker run -d --name kafdrop --network hadoop -p 9000:9000 ^
+  -e KAFKA_BROKERCONNECT=hadoop-master:9092 ^
+  obsidiandynamics/kafdrop:latest
+
+

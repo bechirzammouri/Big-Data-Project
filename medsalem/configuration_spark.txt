@@ -1,0 +1,136 @@
+export KAFKA_BOOTSTRAP=hadoop-master:9092
+export IN_TOPIC=tomtom.flow
+export PARQUET_EVENTS=hdfs://hadoop-master:9000/datalake/tomtom/events
+export PARQUET_METRICS=hdfs://hadoop-master:9000/datalake/tomtom/metrics
+
+//creation fichier nano stream_to_hdfs_spark22.py
+
+# stream_to_hdfs_spark22.py
+import os
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType, StructField, StringType, DoubleType, BooleanType
+from pyspark.sql.functions import col, from_json, when, window, avg, max as sfmax
+
+KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "hadoop-master:9092")
+IN_TOPIC        = os.getenv("IN_TOPIC", "tomtom.flow")
+AGG_WINDOW      = os.getenv("AGG_WINDOW", "1 minute")
+
+PARQUET_EVENTS  = os.getenv("PARQUET_EVENTS",  "hdfs://hadoop-master:9000/datalake/tomtom/events")
+PARQUET_METRICS = os.getenv("PARQUET_METRICS", "hdfs://hadoop-master:9000/datalake/tomtom/metrics")
+CKPT_EVENTS     = os.getenv("CKPT_EVENTS",  "/tmp/ckpt_tomtom_events")
+CKPT_METRICS    = os.getenv("CKPT_METRICS", "/tmp/ckpt_tomtom_metrics")
+
+spark = (SparkSession.builder
+         .appName("TomTom-Streaming-to-HDFS")
+         .getOrCreate())
+spark.sparkContext.setLogLevel("WARN")
+
+schema = StructType([
+    StructField("currentSpeed",       DoubleType(), True),
+    StructField("freeFlowSpeed",      DoubleType(), True),
+    StructField("currentTravelTime",  DoubleType(), True),
+    StructField("freeFlowTravelTime", DoubleType(), True),
+    StructField("confidence",         DoubleType(), True),
+    StructField("roadClosure",        BooleanType(), True),
+    StructField("endpoint",           StringType(), True),
+    StructField("point",              StringType(), True),
+])
+
+raw = (spark.readStream
+    .format("kafka")
+    .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
+    .option("subscribe", IN_TOPIC)
+    .option("startingOffsets", "latest")
+    .option("failOnDataLoss", "false")
+    .load())
+
+parsed = (raw
+    .select(
+        col("timestamp").alias("event_ts"),
+        from_json(col("value").cast("string"), schema).alias("j")
+    )
+    .select(
+        "event_ts",
+        col("j.point").alias("point"),
+        col("j.endpoint").alias("endpoint"),
+        col("j.currentSpeed").alias("currentSpeed"),
+        col("j.freeFlowSpeed").alias("freeFlowSpeed"),
+        col("j.currentTravelTime").alias("currentTravelTime"),
+        col("j.freeFlowTravelTime").alias("freeFlowTravelTime"),
+        col("j.confidence").alias("confidence"),
+        col("j.roadClosure").alias("roadClosure"),
+    )
+    .withColumn("currentSpeed", when(col("currentSpeed") >= 0, col("currentSpeed")))
+    .withColumn("freeFlowSpeed", when(col("freeFlowSpeed") >= 0, col("freeFlowSpeed")))
+)
+
+metrics = (parsed
+    .withColumn(
+        "congestion_ratio",
+        when(col("freeFlowSpeed") > 0, 1.0 - (col("currentSpeed")/col("freeFlowSpeed"))).otherwise(None)
+    )
+    .withColumn(
+        "congestion_level",
+        when(col("roadClosure") == True, "closed")
+        .when(col("congestion_ratio") <= 0.20, "low")
+        .when(col("congestion_ratio") <= 0.40, "moderate")
+        .when(col("congestion_ratio") <= 0.60, "high")
+        .otherwise("severe")
+    )
+)
+
+agg = (metrics
+    .withWatermark("event_ts", "2 minutes")
+    .groupBy(window(col("event_ts"), AGG_WINDOW), col("point"))
+    .agg(
+        avg("currentSpeed").alias("avg_speed"),
+        avg("freeFlowSpeed").alias("avg_freeflow"),
+        avg("congestion_ratio").alias("avg_congestion"),
+        sfmax("confidence").alias("max_confidence")
+    )
+    .select(
+        col("window.start").alias("window_start"),
+        col("window.end").alias("window_end"),
+        "point", "avg_speed", "avg_freeflow", "avg_congestion", "max_confidence"
+    )
+)
+
+q_events = (metrics
+    .writeStream
+    .format("parquet")
+    .option("path", PARQUET_EVENTS)
+    .option("checkpointLocation", CKPT_EVENTS)
+    .outputMode("append")
+    .start())
+
+q_metrics = (agg
+    .writeStream
+    .format("parquet")
+    .option("path", PARQUET_METRICS)
+    .option("checkpointLocation", CKPT_METRICS)
+    .outputMode("append")
+    .start())
+
+spark.streams.awaitAnyTermination()
+
+
+
+
+
+//lancement spark 
+ spark-submit \
+  --packages org.apache.spark:spark-sql-kafka-0-10_2.11:2.2.0 \
+  --conf spark.hadoop.fs.defaultFS=hdfs://hadoop-master:9000 \
+  /root/stream_to_hdfs_spark22.py
+
+
+//voir les fichiers cree sous hdfs 
+
+spark-sql --master local[1] -e \
+'SELECT * FROM parquet.`hdfs://hadoop-master:9000/datalake/tomtom/metrics` LIMIT 10'
+
+pyspark
+df = spark.read.parquet('hdfs://hadoop-master:9000/datalake/tomtom/metrics')
+df.printSchema()
+df.show(5, truncate=False)
+
