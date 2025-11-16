@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 # producer_incidents.py - Alternative using Traffic Incidents API
+
+import os 
 import time
 import requests
 from kafka import KafkaProducer
@@ -8,7 +10,7 @@ from datetime import datetime
 
 # TomTom Traffic Incidents API
 base_url = "api.tomtom.com"
-API_KEY = "2fBzltDJko3cviTqIjoRHiVvwOJRbkmv"  # Replace with your actual API key
+API_KEY = os.getenv("TOMTOM_API_KEY")  # Replace with your actual API key
 TOPIC = "traffic_events"
 POLL_INTERVAL = 60  # seconds
 
