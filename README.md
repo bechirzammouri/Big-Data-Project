@@ -40,8 +40,8 @@ chmod +x fix_spark_kafka_connector.sh
 
 ### 3. Setup TomTom API Key
 Edit `produce_incident.py` and replace the API_KEY:
-```python
-API_KEY = "your_tomtom_api_key_here"
+```sh
+export API_KEY = "your_tomtom_api_key_here"
 ```
 
 ### 4. Run the Pipeline
@@ -52,6 +52,10 @@ python3 produce_incident.py
 ```
 
 **Terminal 2 - Start Spark Streaming:**
+first you need to create a directory in the hdfs with the name of the topic :
+```bash
+hdfs dfs -mkdir -p /traffic/incidents
+```
 ```bash
 python3 kafka_to_hdfs.py
 ```
