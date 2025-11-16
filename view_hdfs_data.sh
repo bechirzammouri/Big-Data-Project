@@ -25,29 +25,8 @@ echo "   $SAMPLE_FILE"
 
 echo ""
 echo "5️⃣ Viewing data with PySpark..."
-python3 <<EOF
-from pyspark.sql import SparkSession
+python3 ~/Big-Data-Project/view_parquet.py $SAMPLE_FILE
 
-# Create Spark session
-spark = SparkSession.builder \
-    .appName("QuickView") \
-    .getOrCreate()
-
-# Set log level to reduce noise
-spark.sparkContext.setLogLevel("ERROR")
-
-# Your code
-HDFS_PATH = "/traffic/incidents"
-df = spark.read.parquet(f"hdfs://hadoop-master:9000{HDFS_PATH}")
-print(f"\n📊 Total records: {df.count()}")
-print("\n📋 Sample data (first 5 records):\n")
-df.show(5, truncate=False)
-print("\n📈 Records by severity:")
-df.groupBy("severity").count().orderBy("severity").show()
-
-# Stop Spark session
-spark.stop()
-EOF
 
 echo ""
 echo "============================"
