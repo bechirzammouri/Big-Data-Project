@@ -13,7 +13,7 @@ if (-Not (Test-Path ".\data")) {
 
 # Data source URL
 # Data source URL (avec LIMIT)
-$url = "https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/comptages-routiers-permanents/exports/csv?lang=fr&timezone=Europe%2FParis&use_labels=true&delimiter=%3B&limit=100000"
+$url = "https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/comptages-routiers-permanents/exports/csv?lang=fr&timezone=Europe%2FParis&use_labels=true&delimiter=%3B&limit=10000"
 $outputFile = ".\data\paris_traffic_data.csv"
 
 

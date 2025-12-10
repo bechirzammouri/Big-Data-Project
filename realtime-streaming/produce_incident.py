@@ -10,9 +10,9 @@ from datetime import datetime
 
 # TomTom Traffic Incidents API
 base_url = "api.tomtom.com"
-API_KEY = os.getenv("TOMTOM_API_KEY")  # Replace with your actual API key
+API_KEY = "MFgrpEhal6zcFxXE9qOsLXL1nqBHqpf3"  # TomTom API key
 TOPIC = "traffic_events"
-POLL_INTERVAL = 60  # seconds
+POLL_INTERVAL = 30  # seconds
 
 # Paris bounding box coordinates
 BBOX = "2.2241,48.8155,2.4699,48.9022"  # minLon,minLat,maxLon,maxLat
@@ -64,35 +64,43 @@ def send_incidents_to_kafka(data):
     
     try:
         incidents = data.get("incidents", [])
+        print(f"DEBUG: Found {len(incidents)} incidents in API response")
         
         if not incidents:
             print("No incidents found in the response")
             return
         
+        # Use a single timestamp for all events in this batch
+        batch_ts = datetime.now().isoformat()
+        
         events_sent = 0
         for incident in incidents:
             # Extract relevant information
             props = incident.get("properties", {})
+            events_list = props.get("events", [{}])
             event = {
                 "id": props.get("id"),
                 "type": props.get("iconCategory"),
-                "description": props.get("events", [{}])[0].get("description", ""),
+                "description": events_list[0].get("description", ""),
+                "event_code": str(events_list[0].get("code", "")),
                 "location": {
                     "from": props.get("from"),
                     "to": props.get("to"),
                     "coordinates": incident.get("geometry", {}).get("coordinates")
                 },
                 "severity": props.get("magnitudeOfDelay", 0),
-                "delay": props.get("delay", 0),
-                "length": props.get("length", 0),
+                "delay_seconds": props.get("delay", 0),
+                "length_meters": props.get("length", 0),
                 "roadNumbers": props.get("roadNumbers", []),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": batch_ts,
                 "start_time": props.get("startTime"),
                 "end_time": props.get("endTime")
             }
             
             producer.send(TOPIC, value=event)
             events_sent += 1
+            if events_sent % 100 == 0:
+                print("  ... queued {} messages".format(events_sent))
         
         producer.flush()
         print(f" Sent {events_sent} incident(s) to Kafka topic '{TOPIC}'")

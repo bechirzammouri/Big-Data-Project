@@ -14,32 +14,37 @@ services:
       - ./postgres-init:/docker-entrypoint-initdb.d
       - ./data:/data
     networks:
-      - bigdata-network
+      - hadoop
 
-  # Hadoop cluster with Spark and Sqoop
-  hadoop:
-    image: liliasfaxi/hadoop-cluster:latest
-    container_name: hadoop_cluster
-    hostname: hadoop
+  # Unified Hadoop cluster (Historical + Real-time)
+  hadoop-master:
+    image: liliasfaxi/spark-hadoop:hv-2.7.2
+    container_name: hadoop-master
+    hostname: hadoop-master
     ports:
       - "9870:9870"    # HDFS NameNode Web UI
       - "8088:8088"    # YARN ResourceManager
       - "9000:9000"    # HDFS port
+      - "9092:9092"    # Kafka
+      - "2181:2181"    # Zookeeper
+      - "4040:4040"    # Spark UI
     volumes:
       - hadoop_data:/hadoop
       - ./sqoop-scripts:/sqoop-scripts
       - ./scripts:/scripts
       - ./data:/data
+      - .:/app
     networks:
-      - bigdata-network
+      - hadoop
     tty: true
     stdin_open: true
+    working_dir: /app
 
 volumes:
   postgres_data:
   hadoop_data:
 
 networks:
-  bigdata-network:
+  hadoop:
     driver: bridge
 
